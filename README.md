@@ -55,7 +55,7 @@ python scripts/run_paddleocr_vl_batch.py \
   --sample-dir samples \
   --output-dir output/mlx \
   --backend mlx-vlm-server \
-  --server-url http://localhost:8111/ \
+  --server-url http://127.0.0.1:8111/ \
   --api-model-name PaddlePaddle/PaddleOCR-VL-1.5 \
   --device cpu
 ```

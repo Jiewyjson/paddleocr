@@ -116,6 +116,8 @@ def build_pipeline(args):
         "pipeline_version": args.pipeline_version,
         "device": args.device,
         "vl_rec_backend": args.backend,
+        "use_doc_orientation_classify": args.use_doc_orientation_classify,
+        "use_doc_unwarping": args.use_doc_unwarping,
     }
     if args.server_url:
         pipeline_kwargs["vl_rec_server_url"] = args.server_url
