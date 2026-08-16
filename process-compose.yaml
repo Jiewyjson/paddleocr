@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/F1bonacc1/process-compose/main/schemas/process-compose-schema.json
+#
+# just dev    — mlx + api + web, foreground TUI
+# just serve  — mlx + api only, detached
+
+version: "0.5"
+
+log_level: info
+log_location: logs/process-compose.log
+log_configuration:
+  disable_json: true
+  add_timestamp: true
+  no_metadata: true
+
+shell:
+  shell_command: bash
+  shell_argument: -c
+
+processes:
+  mlx:
+    command: ./scripts/start_mlx_vlm_server.sh
+    namespace: ocr
+    availability:
+      restart: on_failure
+      backoff_seconds: 2
+    environment:
+      - "MLX_HOST=127.0.0.1"
+      - "MLX_PORT=8111"
+    log_location: logs/mlx.log
+    shutdown:
+      signal: 15
+      timeout_seconds: 15
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: /docs
+        port: 8111
+      initial_delay_seconds: 2
+      period_seconds: 2
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 60
+
+  api:
+    command: bash scripts/start_ocr_api.sh
+    namespace: ocr
+    availability:
+      restart: on_failure
+      backoff_seconds: 2
+    depends_on:
+      mlx:
+        condition: process_healthy
+    log_location: logs/api.log
+    shutdown:
+      signal: 15
+      timeout_seconds: 15
+    readiness_probe:
+      exec:
+        command: bash -c 'for h in 127.0.0.1 "${OCR_BIND_HOST:-}" 192.168.5.24; do [[ -z "$h" || "$h" == "0.0.0.0" ]] && continue; curl -sf -o /dev/null --connect-timeout 1 "http://$h:${OCR_PORT:-8788}/v1/healthz" && exit 0; done; exit 1'
+      initial_delay_seconds: 1
+      period_seconds: 2
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 20
+
+  web:
+    command: pnpm dev
+    working_dir: web
+    namespace: web
+    availability:
+      restart: on_failure
+      backoff_seconds: 2
+    depends_on:
+      api:
+        condition: process_healthy
+    log_location: logs/web.log
+    shutdown:
+      signal: 15
+      timeout_seconds: 10
+    readiness_probe:
+      http_get:
+        host: 192.168.5.24
+        scheme: http
+        path: /
+        port: 4321
+      initial_delay_seconds: 1
+      period_seconds: 1
+      timeout_seconds: 3
+      success_threshold: 1
+      failure_threshold: 30

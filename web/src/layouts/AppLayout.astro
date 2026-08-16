@@ -1,0 +1,22 @@
+---
+import "@/styles/globals.css";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "选区 OCR" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="在浏览器本地打开 PDF 或图片，仅发送选区图片给本机 OCR 服务。" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

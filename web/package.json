@@ -1,0 +1,36 @@
+{
+  "name": "pdf-crop-ocr-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro check",
+    "preview": "astro preview",
+    "pages:dev": "astro build && wrangler pages dev dist --compatibility-date=2026-08-16"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.4.2",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@tailwindcss/vite": "^4.1.13",
+    "astro": "^5.16.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.544.0",
+    "pdfjs-dist": "^5.4.149",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tailwind-merge": "^3.3.0",
+    "tailwindcss": "^4.1.13"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.34.0"
+  }
+}

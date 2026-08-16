@@ -1,0 +1,23 @@
+# This file belongs on the LAN machine that runs `cloudflared`, not necessarily
+# on the Mac that runs the OCR API. Keep the filled-in file outside the repo.
+#
+# Replace the service address with the OCR Mac's reserved LAN address. Bind the
+# API to that same address with OCR_BIND_HOST=<ocr-mac-lan-ip>.
+#
+# Use this ingress configuration only for a locally managed Tunnel. If this
+# Tunnel is remotely managed in the Cloudflare dashboard, configure the public
+# hostname, service URL, and Access protection in the dashboard instead.
+tunnel: <tunnel-uuid>
+credentials-file: /path/on-the-tunnel-host/.cloudflared/<tunnel-uuid>.json
+
+ingress:
+  - hostname: ocr.<your-domain>
+    service: http://192.168.1.50:8788
+    originRequest:
+      # This makes cloudflared verify Access JWTs before proxying to FastAPI.
+      access:
+        required: true
+        teamName: <your-cloudflare-access-team-name>
+        audTag:
+          - <api-access-application-audience-tag>
+  - service: http_status:404

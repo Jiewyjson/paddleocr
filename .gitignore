@@ -3,3 +3,16 @@ output/
 __pycache__/
 *.pyc
 .DS_Store
+
+# MVP web app / local Cloudflare development secrets
+web/node_modules/
+web/.astro/
+web/dist/
+web/.wrangler/
+web/.dev.vars
+web/.env
+backend/.env
+
+# Local process-compose stack
+logs/
+.run/
