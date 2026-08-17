@@ -12,6 +12,7 @@ type FunctionContext = {
 
 const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_UPSTREAM_PROTOCOLS = new Set(["http:", "https:"]);
 
 function noStoreJson(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -22,6 +23,15 @@ function noStoreJson(payload: unknown, status = 200) {
       "X-Content-Type-Options": "nosniff",
     },
   });
+}
+
+function resolveOcrTarget(origin: string): URL | null {
+  try {
+    const target = new URL("/v1/ocr", origin);
+    return ALLOWED_UPSTREAM_PROTOCOLS.has(target.protocol) ? target : null;
+  } catch {
+    return null;
+  }
 }
 
 export const onRequestPost = async ({ request, env }: FunctionContext): Promise<Response> => {
@@ -40,7 +50,14 @@ export const onRequestPost = async ({ request, env }: FunctionContext): Promise<
     return noStoreJson({ detail: "OCR relay is not configured." }, 503);
   }
 
-  const target = new URL("/v1/ocr", env.OCR_API_ORIGIN);
+  const target = resolveOcrTarget(env.OCR_API_ORIGIN);
+  if (!target) {
+    return noStoreJson(
+      { detail: "OCR relay has an invalid OCR_API_ORIGIN configuration. Use a full http(s) URL." },
+      503,
+    );
+  }
+
   const headers = new Headers({
     "Content-Type": type,
     "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID,
@@ -58,6 +75,18 @@ export const onRequestPost = async ({ request, env }: FunctionContext): Promise<
       body: request.body,
       redirect: "manual",
     });
+
+    // Access sends an HTML login redirect when a service token is missing,
+    // expired, or no longer matches the application's Service Auth policy.
+    // Do not relay that cross-origin redirect to the browser: it turns into a
+    // misleading CORS failure instead of an actionable same-origin response.
+    if (upstream.status >= 300 && upstream.status < 400) {
+      return noStoreJson(
+        { detail: "OCR relay could not authenticate with the protected OCR service." },
+        502,
+      );
+    }
+
     const responseHeaders = new Headers(upstream.headers);
     responseHeaders.delete("set-cookie");
     responseHeaders.set("Cache-Control", "no-store");

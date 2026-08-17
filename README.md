@@ -105,7 +105,7 @@ Set these Pages environment values/secrets:
 
 | Name | Type | Value |
 | --- | --- | --- |
-| `OCR_API_ORIGIN` | plain variable | `https://ocr.<your-domain>` |
+| `OCR_API_ORIGIN` | plain variable or encrypted secret | full URL, e.g. `https://ocr.<your-domain>` |
 | `CF_ACCESS_CLIENT_ID` | encrypted secret | Access service token client ID |
 | `CF_ACCESS_CLIENT_SECRET` | encrypted secret | Access service token client secret |
 
@@ -115,6 +115,17 @@ token value in `PUBLIC_*` variables.
 
 See [the Cloudflare deployment guide](docs/deploy-cloudflare.md) for the exact
 Pages, Access, service-token, and Tunnel setup order.
+
+For a repeatable manual Pages deployment, modeled after this workspace's
+`../paste` release workflow, use the scripts in `web/`:
+
+```bash
+cd web
+pnpm pages:login
+pnpm pages:create -- <pages-project-name> main   # once
+pnpm pages:secrets -- <pages-project-name>       # prompts; values are not committed
+pnpm pages:deploy -- <pages-project-name> main   # repeat for each release
+```
 
 ## Useful examples
 

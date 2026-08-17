@@ -9,7 +9,8 @@ web/node_modules/
 web/.astro/
 web/dist/
 web/.wrangler/
-web/.dev.vars
+web/.dev.vars*
+!web/.dev.vars.example
 web/.env
 backend/.env
 

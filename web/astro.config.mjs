@@ -14,7 +14,7 @@ export default defineConfig({
     plugins: [tailwindcss()],
     server: {
       host: true,
-      allowedHosts: ["ocr.wyjson.com", ".wyjson.com"],
+      allowedHosts: ["ocr.wyjsonw.com", ".wyjsonw.com"],
       proxy: {
         "/api/ocr": {
           target: ocrApiOrigin,

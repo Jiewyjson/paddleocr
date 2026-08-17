@@ -10,7 +10,7 @@ browser
 app.<your-domain>  (Cloudflare Pages + /api/ocr Function)
   │  Access service token, crop JPEG stream only
   ▼
-ocr.<your-domain>  (Cloudflare Access + Tunnel)
+ocr-api.<your-domain>  (Cloudflare Access + Tunnel)
   ▼
 cloudflared on a separate LAN tunnel host
   ▼
@@ -19,21 +19,43 @@ http://<ocr-mac-lan-ip>:8788    (FastAPI on this Mac)
 127.0.0.1:8111    (MLX-VLM on this Mac)
 ```
 
-The Pages site and the tunnel API must not share an unauthenticated public
-origin. FastAPI is reachable only at this Mac's fixed/reserved LAN address;
+The Pages site and the tunnel API must use **different hostnames**. A hostname
+can be attached to either Pages or a Tunnel route, not both. For example,
+`ocr.wyjsonw.com` can serve the Pages UI while
+`ocr-api.wyjsonw.com` reaches the Mac through the Tunnel. FastAPI is reachable
+only at this Mac's fixed/reserved LAN address;
 the MLX-VLM server remains loopback-only. `cloudflared` may run on any LAN host
 that can reach FastAPI at that address.
 
-## 1. Deploy the Pages site
+## 1. Create and deploy the Pages site with Wrangler
 
-Create a Cloudflare Pages project from this repository with:
+This repository uses the same manual, local-Wrangler release style as
+`../paste`, but its target is **Cloudflare Pages** rather than an OpenNext
+Worker. `web/functions/api/ocr.ts` requires a Pages Function, so do not use
+Dashboard drag-and-drop uploads and do not run `wrangler deploy`.
 
-| Pages setting | Value |
-| --- | --- |
-| Root directory | `web` |
-| Build command | `pnpm build` |
-| Build output directory | `dist` |
-| Node version | 22 or newer |
+This is a **Direct Upload** Pages project. Cloudflare does not allow a Direct
+Upload project to later become a Git-integrated Pages project. Use this path
+when releases should be explicitly published from this checkout.
+
+From `web/`, install dependencies once, log in to the same Cloudflare account
+used by the tunnel, then create the project and make the first deployment:
+
+```bash
+pnpm install
+pnpm pages:login
+pnpm pages:create -- <pages-project-name> main
+pnpm pages:deploy -- <pages-project-name> main
+```
+
+The `pages:deploy` helper runs `astro build`, uploads `dist/`, and compiles the
+root `functions/` directory into the `/api/ocr` Pages Function. It requires the
+project name explicitly, rather than using a cached Wrangler project selection.
+For a preview deployment, pass a non-production branch:
+
+```bash
+pnpm pages:deploy -- <pages-project-name> preview
+```
 
 Attach `app.<your-domain>` as the production custom domain. Do not set
 `PUBLIC_OCR_ENDPOINT` in Pages: an unset value makes the browser call the
@@ -69,7 +91,7 @@ tunnel host needs to reach this Mac over the LAN. MLX-VLM stays on
 OCR_BIND_HOST=192.168.1.50 bash scripts/start_ocr_api.sh
 ```
 
-Create a second Self-hosted Access application for `ocr.<your-domain>`. Give
+Create a second Self-hosted Access application for `ocr-api.<your-domain>`. Give
 it a **Service Auth** policy that accepts the service token created in the next
 step.
 
@@ -79,10 +101,12 @@ places:
 
 1. **Remotely managed Tunnel (Dashboard):** On the machine already running
    `cloudflared`, keep using its existing connector configuration. In the
-   Cloudflare Tunnel Dashboard, add `ocr.<your-domain>` with service
-   `http://192.168.1.50:8788`, and enable the origin's **Protect with Access**
-   setting for the API Access application's audience. The Dashboard owns this
-   route; no local `ingress` YAML is needed for it.
+   Cloudflare Tunnel Dashboard, add `ocr-api.<your-domain>` with service
+   `http://192.168.1.50:8788`. The Access application provides the edge
+   protection for this hostname. The Dashboard owns this route; no local
+   `ingress` YAML is needed for it. If the connector configuration supports
+   origin JWT validation, configuring the application's audience is an
+   optional defense-in-depth layer.
 2. **Locally managed Tunnel (YAML):** Copy
    `infra/cloudflared/config.yml.example` to a private location on the *tunnel
    host*, replace the placeholders (including the OCR Mac LAN IP), and run:
@@ -100,24 +124,39 @@ Do not bind either Python service to `0.0.0.0`. MLX-VLM must remain on
 
 ## 4. Allow the Pages Function to call the API
 
-Create an Access service token. Add its Client ID and Client Secret as encrypted
-Pages secrets, plus the API hostname as a normal variable:
+Create an Access service token. The repository includes a terminal helper that
+prompts for the required values and stores all three as encrypted Pages secrets:
+
+```bash
+cd web
+pnpm pages:secrets -- <pages-project-name>
+```
+
+Enter `OCR_API_ORIGIN` as a complete HTTP(S) URL — for example,
+`https://ocr-api.<your-domain>`, **not** `ocr-api.<your-domain>` — followed by the
+Access service token Client ID and Client Secret. `OCR_API_ORIGIN` is not
+confidential, but storing it as a secret keeps the manual release flow entirely
+in Wrangler and works identically at runtime. Alternatively, add it as a normal
+Pages variable in the dashboard.
+The bindings are:
 
 | Pages variable | Value |
 | --- | --- |
-| `OCR_API_ORIGIN` | `https://ocr.<your-domain>` |
+| `OCR_API_ORIGIN` | `https://ocr-api.<your-domain>` |
 | `CF_ACCESS_CLIENT_ID` | service token client ID (encrypted) |
 | `CF_ACCESS_CLIENT_SECRET` | service token client secret (encrypted) |
 | `OCR_MAX_IMAGE_BYTES` | optional, defaults to `10485760` |
 
 `web/functions/api/ocr.ts` injects the service-token headers server-side and
-streams the request body. Never set either secret with a `PUBLIC_` prefix and
-never place them in `.env` committed to Git.
+streams the request body. Never set either Access credential with a `PUBLIC_`
+prefix and never place them in `.env` committed to Git. For local Pages
+Function testing, copy `web/.dev.vars.example` to `web/.dev.vars`, add test
+values, then run `pnpm pages:dev`.
 
 ## 5. Restrict LAN access to FastAPI
 
 Binding FastAPI to a LAN address makes `http://192.168.1.50:8788` reachable
-inside the LAN. Cloudflare Access is enforced by the tunnel connector, so a
+inside the LAN. Cloudflare Access is enforced at Cloudflare's edge, so a
 client that calls FastAPI directly would not pass through that check. Add a
 Mac firewall or router ACL that permits TCP/8788 only from the tunnel host's
 LAN IP. Do not create a router port-forward for 8788 or 8111.

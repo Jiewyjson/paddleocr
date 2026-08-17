@@ -1,0 +1,8 @@
+# Used only by `pnpm pages:dev`. Copy this file to `.dev.vars` and replace all
+# placeholders. Never commit the copied file.
+#
+# The local FastAPI server ignores the Access service-token headers, so its
+# loopback URL is appropriate here.
+OCR_API_ORIGIN=http://127.0.0.1:8788
+CF_ACCESS_CLIENT_ID=replace-with-local-test-client-id
+CF_ACCESS_CLIENT_SECRET=replace-with-local-test-client-secret

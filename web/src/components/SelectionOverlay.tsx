@@ -102,6 +102,7 @@ type SelectionOverlayProps = {
   disabled?: boolean;
   onChange: (selection: Selection | null) => void;
   onCommit?: () => void;
+  onInteractionChange?: (active: boolean) => void;
 };
 
 export function SelectionOverlay({
@@ -111,6 +112,7 @@ export function SelectionOverlay({
   disabled = false,
   onChange,
   onCommit,
+  onInteractionChange,
 }: SelectionOverlayProps) {
   const overlayRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction | null>(null);
@@ -159,10 +161,12 @@ export function SelectionOverlay({
     if (disabled || event.button !== 0) return;
     const point = pointFromEvent(event);
     if (!point) return;
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const hit = hitTest(point, selection, 14 / cssScale, minEdge);
     if (hit === "draw") {
       interactionRef.current = { type: "draw", start: point };
+      onInteractionChange?.(true);
       onChange({ x: Math.round(point.x), y: Math.round(point.y), width: 0, height: 0 });
       setCursor("crosshair");
       return;
@@ -170,10 +174,12 @@ export function SelectionOverlay({
     if (!selection) return;
     if (hit === "move") {
       interactionRef.current = { type: "move", start: point, origin: selection };
+      onInteractionChange?.(true);
       setCursor("move");
       return;
     }
     interactionRef.current = { type: "resize", handle: hit, start: point, origin: selection };
+    onInteractionChange?.(true);
     setCursor(HANDLES.find((handle) => handle.id === hit)?.cursor ?? "crosshair");
   };
 
@@ -208,13 +214,23 @@ export function SelectionOverlay({
   const finish = (event: ReactPointerEvent<SVGSVGElement>) => {
     const point = pointFromEvent(event);
     const interaction = interactionRef.current;
+    const wasInteracting = interaction !== null;
     interactionRef.current = null;
+    if (wasInteracting) onInteractionChange?.(false);
     if (!point || !interaction) return;
     if (interaction.type === "draw") {
       const next = normalizeSelection(interaction.start, point);
       onChange(isSelectionValid(next, minEdge) ? next : null);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (!interactionRef.current) return;
+      interactionRef.current = null;
+      onInteractionChange?.(false);
+    };
+  }, [onInteractionChange]);
 
   const valid = isSelectionValid(selection, minEdge);
   const handleSize = 8 / cssScale;
@@ -224,7 +240,7 @@ export function SelectionOverlay({
     <svg
       ref={overlayRef}
       viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
-      className="absolute inset-0 h-full w-full touch-none"
+      className="absolute inset-0 h-full w-full touch-none select-none"
       style={{ cursor }}
       onPointerDown={start}
       onPointerMove={move}

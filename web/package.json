@@ -8,7 +8,13 @@
     "build": "astro build",
     "check": "astro check",
     "preview": "astro preview",
-    "pages:dev": "astro build && wrangler pages dev dist --compatibility-date=2026-08-16"
+    "pages:build": "astro build",
+    "pages:check": "wrangler pages functions build functions --outdir .wrangler/functions-check --build-output-directory dist --compatibility-date=2026-08-16",
+    "pages:login": "wrangler login",
+    "pages:create": "bash scripts/create-pages-project.sh",
+    "pages:secrets": "bash scripts/configure-pages-secrets.sh",
+    "pages:deploy": "bash scripts/deploy-pages.sh",
+    "pages:dev": "pnpm run pages:build && wrangler pages dev dist --compatibility-date=2026-08-16"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.2",

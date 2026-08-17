@@ -135,6 +135,89 @@ function getRequestId() {
     : `${Date.now()}${Math.random().toString(16).slice(2)}`;
 }
 
+function errorDetail(body: unknown): string | null {
+  if (!body || typeof body !== "object" || !("detail" in body)) return null;
+  const detail = body.detail;
+  return typeof detail === "string" && detail.trim() ? detail : null;
+}
+
+function isOcrResponse(body: unknown): body is OcrResponse {
+  if (!body || typeof body !== "object") return false;
+  const response = body as Partial<OcrResponse>;
+  return (
+    typeof response.request_id === "string"
+    && typeof response.text === "string"
+    && typeof response.markdown === "string"
+    && typeof response.elapsed_ms === "number"
+    && typeof response.image?.width === "number"
+    && typeof response.image.height === "number"
+  );
+}
+
+async function parseJsonResponse(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json")) return null;
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function pointInRect(x: number, y: number, rect: DOMRect) {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+/** Keep hover/focus styles off until the pointer leaves the toolbar once. */
+function useToolbarHoverArm(visible: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [armed, setArmed] = useState(false);
+  const pointerRef = useRef({ x: Number.NaN, y: Number.NaN });
+
+  useEffect(() => {
+    const track = (event: PointerEvent) => {
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener("pointermove", track);
+    window.addEventListener("pointerup", track);
+    return () => {
+      window.removeEventListener("pointermove", track);
+      window.removeEventListener("pointerup", track);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      setArmed(false);
+      return;
+    }
+
+    const node = ref.current;
+    if (!node) {
+      setArmed(true);
+      return;
+    }
+
+    const { x, y } = pointerRef.current;
+    const underPointer = Number.isFinite(x) && pointInRect(x, y, node.getBoundingClientRect());
+    if (!underPointer) {
+      setArmed(true);
+      return;
+    }
+
+    setArmed(false);
+    const onMove = (event: PointerEvent) => {
+      if (!pointInRect(event.clientX, event.clientY, node.getBoundingClientRect())) {
+        setArmed(true);
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [visible]);
+
+  return { ref, armed };
+}
+
 export function OcrWorkspace() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +243,7 @@ export function OcrWorkspace() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT);
   const [isResizingInspector, setIsResizingInspector] = useState(false);
+  const [isAdjustingSelection, setIsAdjustingSelection] = useState(false);
   inspectorWidthRef.current = inspectorWidth;
   const t = translations[locale];
   const hasSource = Boolean(pdf || rasterImage);
@@ -401,12 +485,16 @@ export function OcrWorkspace() {
         },
         body: crop,
       });
-      const body = (await response.json()) as OcrResponse | { detail?: string };
+      const body = await parseJsonResponse(response);
       if (!response.ok) {
         URL.revokeObjectURL(previewUrl);
-        throw new Error("detail" in body ? body.detail || t.requestFailed : t.requestFailed);
+        throw new Error(errorDetail(body) || `${t.unexpectedResponse} (HTTP ${response.status})`);
       }
-      const item: ResultItem = { ...(body as OcrResponse), previewUrl };
+      if (!isOcrResponse(body)) {
+        URL.revokeObjectURL(previewUrl);
+        throw new Error(`${t.unexpectedResponse} (HTTP ${response.status})`);
+      }
+      const item: ResultItem = { ...body, previewUrl };
       setResults((previous) => {
         const next = [item, ...previous].slice(0, MAX_HISTORY);
         for (const old of previous) {
@@ -511,9 +599,11 @@ export function OcrWorkspace() {
 
   const toolbarPos = selectionIsValid && selection && canvasSize.height
     ? selection.y + selection.height > canvasSize.height * 0.82
-      ? { left: `${(selection.x / canvasSize.width) * 100}%`, bottom: `${(1 - selection.y / canvasSize.height) * 100}%`, transform: "translateY(-8px)" }
-      : { left: `${(selection.x / canvasSize.width) * 100}%`, top: `${((selection.y + selection.height) / canvasSize.height) * 100}%`, transform: "translateY(8px)" }
+      ? { left: `${(selection.x / canvasSize.width) * 100}%`, bottom: `${(1 - selection.y / canvasSize.height) * 100}%`, transform: "translateY(-12px)" }
+      : { left: `${(selection.x / canvasSize.width) * 100}%`, top: `${((selection.y + selection.height) / canvasSize.height) * 100}%`, transform: "translateY(12px)" }
     : null;
+  const showSelectionToolbar = Boolean(toolbarPos && selection && !isAdjustingSelection);
+  const selectionToolbar = useToolbarHoverArm(showSelectionToolbar);
 
   return (
     <div
@@ -638,7 +728,7 @@ export function OcrWorkspace() {
           <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-auto">
               <div className="flex min-h-full items-start justify-center p-4 sm:p-6">
-                <div className="relative w-fit shadow-[0_18px_50px_-24px_rgba(24,24,27,0.45)]">
+                <div className="relative w-fit select-none shadow-[0_18px_50px_-24px_rgba(24,24,27,0.45)]">
                   <canvas ref={canvasRef} className="block max-w-full bg-white" />
                   {canvasSize.width > 0 && (
                     <SelectionOverlay
@@ -648,16 +738,24 @@ export function OcrWorkspace() {
                       disabled={isRendering || isRecognizing}
                       onChange={setSelection}
                       onCommit={recognizeSelection}
+                      onInteractionChange={setIsAdjustingSelection}
                     />
                   )}
-                  {toolbarPos && selection && (
-                    <div className="absolute z-10 hidden items-center gap-1 lg:flex" style={toolbarPos}>
+                  {showSelectionToolbar && selection && (
+                    <div
+                      ref={selectionToolbar.ref}
+                      className={cn(
+                        "absolute z-10 hidden select-none items-center gap-1 lg:flex",
+                        !selectionToolbar.armed && "[&_button]:pointer-events-none",
+                      )}
+                      style={toolbarPos ?? undefined}
+                    >
                       <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg">
-                        <Button size="sm" onClick={recognizeSelection} disabled={isRecognizing}>
+                        <Button size="sm" onClick={recognizeSelection} disabled={isRecognizing} tabIndex={selectionToolbar.armed ? 0 : -1}>
                           {isRecognizing ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanText className="h-3.5 w-3.5" />}
                           {isRecognizing ? t.recognizing : t.recognizeSelection}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>
+                        <Button size="sm" variant="ghost" onClick={() => setSelection(null)} tabIndex={selectionToolbar.armed ? 0 : -1}>
                           {t.clearSelection}
                         </Button>
                       </div>
@@ -675,7 +773,7 @@ export function OcrWorkspace() {
               </div>
             </div>
             {selectionIsValid && (
-              <div className="flex shrink-0 items-center justify-center gap-2 border-t border-zinc-200 bg-white px-3 py-2 lg:hidden">
+              <div className="flex shrink-0 select-none items-center justify-center gap-2 border-t border-zinc-200 bg-white px-3 py-2 lg:hidden">
                 <Button size="sm" className="flex-1 max-w-40" onClick={recognizeSelection} disabled={isRecognizing}>
                   {isRecognizing ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanText className="h-3.5 w-3.5" />}
                   {isRecognizing ? t.recognizing : t.recognizeSelection}
