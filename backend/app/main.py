@@ -13,6 +13,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .config import Settings
 from .engine import OcrEngine
+from .strategies import StrategyName
 
 
 logger = logging.getLogger("crop_ocr")
@@ -64,7 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "model_loaded": engine.is_loaded}
 
     @app.post("/v1/ocr")
-    async def ocr(request: Request) -> Response:
+    async def ocr(request: Request, strategy: StrategyName | None = None) -> Response:
         request_id = _request_id(request)
         content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
         if content_type not in SUPPORTED_IMAGE_TYPES:
@@ -88,7 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         bgr_image, width, height = _decode_crop(payload, runtime_settings)
         engine: OcrEngine = request.app.state.engine
         try:
-            result = await engine.infer(bgr_image)
+            result = await engine.infer(bgr_image, strategy=strategy)
         except Exception:
             # Never include image bytes, paths, or model internals in a client error.
             logger.exception("OCR inference failed request_id=%s", request_id)
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "markdown": result.markdown,
                 "blocks": result.blocks,
                 "elapsed_ms": result.elapsed_ms,
+                "strategy": result.strategy,
                 "image": {"width": width, "height": height},
             }
         )

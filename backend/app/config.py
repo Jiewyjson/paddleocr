@@ -52,6 +52,8 @@ class Settings:
     device: str
     use_layout_detection: bool
     max_new_tokens: int | None
+    default_strategy: str = "document"
+    strategy_cache_size: int = 2
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -82,4 +84,6 @@ class Settings:
             device=os.getenv("OCR_DEVICE", "cpu"),
             use_layout_detection=_as_bool("OCR_USE_LAYOUT_DETECTION", False),
             max_new_tokens=parsed_max_new_tokens,
+            default_strategy=os.getenv("OCR_DEFAULT_STRATEGY", "document"),
+            strategy_cache_size=_as_positive_int("OCR_STRATEGY_CACHE_SIZE", 2),
         )
