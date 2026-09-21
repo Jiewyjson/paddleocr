@@ -1,3 +1,5 @@
+# Tests inject model doubles and inspect the internal cache without loading weights.
+# pylint: disable=protected-access
 import asyncio
 import io
 import threading
@@ -50,7 +52,7 @@ class StrategyTests(unittest.TestCase):
         active = 0
         peak = 0
         guard = threading.Lock()
-        def predict(image):
+        def predict(_image):
             nonlocal active, peak
             with guard:
                 active += 1
@@ -80,7 +82,7 @@ class StrategyTests(unittest.TestCase):
     def test_vl_preserves_markdown_and_token_limit(self):
         strategy = PaddleVlStrategy.__new__(PaddleVlStrategy)
         strategy._settings = replace(self.settings, max_new_tokens=123)
-        def predict(image, **kwargs):
+        def predict(_image, **kwargs):
             self.assertEqual(kwargs['max_new_tokens'], 123)
             yield SimpleNamespace(markdown={'markdown_texts': '| A |'},
                                   json={'res': {'parsing_res_list': []}})

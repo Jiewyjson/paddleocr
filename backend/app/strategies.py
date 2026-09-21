@@ -24,11 +24,11 @@ class StrategyResult:
     blocks: list[dict[str, Any]]
 
 
-class OcrStrategy(Protocol):
+class OcrStrategy(Protocol):  # pylint: disable=too-few-public-methods  # Single predict interface.
     def predict(self, image: np.ndarray) -> StrategyResult: ...
 
 
-class PaddleOcrStrategy:
+class PaddleOcrStrategy:  # pylint: disable=too-few-public-methods  # Single predict interface.
     def __init__(self, settings: Settings, name: str) -> None:
         from paddleocr import PaddleOCR
 
@@ -59,7 +59,7 @@ class PaddleOcrStrategy:
         return StrategyResult(text=text, markdown=text, blocks=blocks)
 
 
-class PaddleVlStrategy:
+class PaddleVlStrategy:  # pylint: disable=too-few-public-methods  # Single predict interface.
     def __init__(self, settings: Settings) -> None:
         from paddleocr import PaddleOCRVL
 
