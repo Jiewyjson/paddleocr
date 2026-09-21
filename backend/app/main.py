@@ -4,7 +4,6 @@ import io
 import logging
 import re
 import uuid
-from typing import Annotated
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -22,7 +21,7 @@ SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     runtime_settings = settings or Settings.from_env()
-    app = FastAPI(
+    app = FastAPI(  # pylint: disable=redefined-outer-name  # Factory-local ASGI instance.
         title="Local crop OCR API",
         version="0.1.0",
         docs_url=None,
@@ -139,8 +138,6 @@ def _decode_crop(payload: bytes, settings: Settings) -> tuple[np.ndarray, int, i
                 )
             rgb_image = ImageOps.exif_transpose(source).convert("RGB")
             rgb = np.asarray(rgb_image, dtype=np.uint8)
-    except HTTPException:
-        raise
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

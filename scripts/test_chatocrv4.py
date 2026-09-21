@@ -224,7 +224,7 @@ def run_mode_a_qianfan(args, image_path: Path, output_dir: Path):
         print(f"  chat completed in {time.time() - t1:.1f}s")
         dump_json(chat_result, "chat_result (final extraction)", output_dir)
         print_extraction_results(chat_result)
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught  # Report failures and continue the batch/demo.
         print(f"  Error: {exc}")
         import traceback
         traceback.print_exc()
@@ -322,7 +322,7 @@ def run_mode_b_custom_llm(args, image_path: Path, output_dir: Path):
         print(f"  chat completed in {time.time() - t0:.1f}s")
         dump_json(chat_result, "chat_result (final extraction)", output_dir)
         print_extraction_results(chat_result)
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-exception-caught  # Report failures and continue the batch/demo.
         print(f"  Error: {exc}")
         import traceback
         traceback.print_exc()
@@ -412,7 +412,7 @@ def main():
 
     # --- Import check ---
     try:
-        from paddleocr import PPChatOCRv4Doc  # noqa: F401
+        from paddleocr import PPChatOCRv4Doc  # pylint: disable=unused-import  # Verify this optional API is available.
     except ImportError:
         print('\nError: PPChatOCRv4Doc not found. Install: pip install "paddleocr[ie]"')
         return 1
