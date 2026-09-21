@@ -10,6 +10,8 @@ type FunctionContext = {
   env: Env;
 };
 
+const ALLOWED_STRATEGIES = new Set(["fast", "balanced", "accurate", "document"]);
+
 const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_UPSTREAM_PROTOCOLS = new Set(["http:", "https:"]);
@@ -56,6 +58,14 @@ export const onRequestPost = async ({ request, env }: FunctionContext): Promise<
       { detail: "OCR relay has an invalid OCR_API_ORIGIN configuration. Use a full http(s) URL." },
       503,
     );
+  }
+
+  const strategy = new URL(request.url).searchParams.get("strategy");
+  if (strategy !== null) {
+    if (!ALLOWED_STRATEGIES.has(strategy)) {
+      return noStoreJson({ detail: "Unknown OCR strategy." }, 422);
+    }
+    target.searchParams.set("strategy", strategy);
   }
 
   const headers = new Headers({
