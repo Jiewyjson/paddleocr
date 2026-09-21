@@ -89,6 +89,48 @@ bash scripts/start_ocr_api.sh
 cd web && pnpm install && pnpm dev
 ```
 
+### OCR strategies
+
+The API supports `POST /v1/ocr?strategy=<name>` (raw JPEG/PNG/WebP body).
+The Pages relay accepts the same parameter at `/api/ocr?strategy=<name>`.
+Unknown or empty strategy values return HTTP 422. Omitting the parameter uses
+`OCR_DEFAULT_STRATEGY`, which defaults to `document` for existing clients.
+The response includes the selected `strategy` alongside the existing fields.
+
+| Strategy | Detection | Recognition |
+| --- | --- | --- |
+| `fast` | PP-OCRv5_mobile_det | PP-OCRv5_mobile_rec |
+| `balanced` | PP-OCRv5_mobile_det | PP-OCRv5_server_rec |
+| `accurate` | PP-OCRv5_server_det | PP-OCRv5_server_rec |
+| `document` | Existing VL pipeline settings | PaddleOCR-VL-1.5 via MLX |
+
+`OcrEngine` selects a `PaddleOcrStrategy` preset or `PaddleVlStrategy`, lazily
+loads it, and serializes initialization, inference, and result extraction.
+`OCR_STRATEGY_CACHE_SIZE` (default 2) bounds API-side pipeline instances using
+LRU eviction. Eviction drops references; native allocators may retain memory,
+and the separate MLX server keeps ownership of its loaded VL weights. First use
+of a PP-OCRv5 preset downloads missing official models and takes longer.
+
+All modes return `text`, `markdown`, and `blocks` with rectangular `bbox` values.
+Traditional OCR returns plain text in `markdown`; it does not reconstruct table
+structure or formulas like VL. There is no automatic fallback between strategies.
+The current frontend continues to use the backend default; a mode selector is
+not included in this backend change.
+
+To change the default, set `OCR_DEFAULT_STRATEGY=balanced` in `backend/.env`
+and restart the API. Updating Python alone requires a Mac API restart, not a
+Cloudflare deployment. To enable explicit strategy selection through the Pages
+relay, deploy the updated Function using the existing Pages deployment script
+after updating the backend. This does not upload model weights to Cloudflare.
+
+Checks (Node 22.18+ with built-in TypeScript stripping for the relay test):
+
+```bash
+.venv/bin/python -m unittest discover -s backend/tests -v
+node --test web/tests/ocr-relay.test.mjs
+cd web && pnpm check && pnpm pages:check
+```
+
 ### Cloudflare deployment boundary
 
 Protect the Pages hostname with Cloudflare Access. The Pages Function at
