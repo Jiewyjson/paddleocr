@@ -5,3 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
+
+# Keep correctness checks enabled while adopting lint for the existing codebase.
+# Doc coverage, complexity limits and generated patch-string lengths are not CI gates.
+[tool.pylint.messages_control]
+disable = [
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "too-many-instance-attributes",
+  "too-many-locals",
+  "line-too-long",
+  # OCR imports are intentionally lazy so health checks work without model startup.
+  "import-outside-toplevel",
+]

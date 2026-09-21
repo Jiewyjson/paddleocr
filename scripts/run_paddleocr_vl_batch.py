@@ -181,7 +181,7 @@ def main():
                 page_dir.mkdir(parents=True, exist_ok=True)
                 result.save_to_json(str(page_dir))
                 result.save_to_markdown(str(page_dir))
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # Report failures and continue the batch/demo.
             status = "error"
             error = str(exc)
             print(f"  failed: {exc}")
